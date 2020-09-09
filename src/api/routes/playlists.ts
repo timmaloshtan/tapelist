@@ -5,12 +5,11 @@ import config from "../../config";
 
 const route = Router();
 
-async function* fetchYouTubePlaylistItems(
-  options: youtube_v3.Params$Resource$Playlistitems$List
-): AsyncGenerator<youtube_v3.Schema$PlaylistItem, void, unknown> {
-  const youtube = google.youtube("v3");
-
-  const response = await youtube.playlistItems.list(options);
+async function* fetchYouTubeResourceItems<T>(
+  resource: any,
+  options: any
+): AsyncGenerator<T, void, unknown> {
+  const response = await resource(options);
 
   const nextPageToken = response?.data?.nextPageToken;
 
@@ -21,7 +20,7 @@ async function* fetchYouTubePlaylistItems(
   }
 
   if (nextPageToken) {
-    yield* fetchYouTubePlaylistItems({
+    yield* fetchYouTubeResourceItems(resource, {
       ...options,
       pageToken: nextPageToken,
     });
@@ -35,23 +34,50 @@ export default (app: Router) => {
     const urlObject = new url.URL(req.body.url as string);
     const playlistId = urlObject.searchParams.get("list") as string;
 
-    const items = [];
+    const youtube = google.youtube("v3");
 
-    const generator = fetchYouTubePlaylistItems({
+    const playlistItems = [];
+
+    const playlistItemsGernerator = fetchYouTubeResourceItems<
+      youtube_v3.Schema$PlaylistItem
+    >(youtube.playlistItems.list.bind(youtube.playlistItems), {
       playlistId,
       part: ["snippet", "contentDetails"],
       key: config.youtube.key,
       maxResults: 50,
     });
 
-    for await (const item of generator) {
-      items.push({
+    for await (const item of playlistItemsGernerator) {
+      playlistItems.push({
         title: item.snippet?.title,
         position: item.snippet?.position,
         videoId: item.contentDetails?.videoId,
       });
     }
 
-    res.status(200).json(items);
+    const videoIDs = playlistItems.map((playlistItem) => playlistItem.videoId);
+
+    const videos = [];
+
+    const videosGernerator = fetchYouTubeResourceItems<youtube_v3.Schema$Video>(
+      youtube.videos.list.bind(youtube.videos),
+      {
+        id: videoIDs,
+        part: ["contentDetails"],
+        key: config.youtube.key,
+        maxResults: 50,
+      }
+    );
+
+    for await (const item of videosGernerator) {
+      videos.push({
+        duration: item.contentDetails?.duration,
+        id: item.id,
+      });
+    }
+
+    console.log("videos", videos);
+
+    res.status(200).json(playlistItems);
   });
 };
