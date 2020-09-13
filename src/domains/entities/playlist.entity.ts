@@ -1,9 +1,11 @@
 import Duration from "./duration.entity";
 import PlaylistItem from "./playlist-item.entity";
 
+export type PlaylistUrl = string;
+
 class Playlist {
   constructor(
-    private readonly _url: string,
+    private readonly _url: PlaylistUrl,
     private readonly _title: string,
     private _items: PlaylistItem[] = []
   ) {}
