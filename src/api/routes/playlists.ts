@@ -2,6 +2,10 @@ import { Router, Request, Response } from "express";
 import url from "url";
 import { google, youtube_v3 } from "googleapis";
 import config from "../../config";
+import {
+  parseISO8601Duration,
+  durationToString,
+} from "../../utils/parseISO8601Durations";
 
 const route = Router();
 
@@ -36,7 +40,15 @@ export default (app: Router) => {
 
     const youtube = google.youtube("v3");
 
-    const playlistItems = [];
+    const playlist = (
+      await youtube.playlists.list({
+        id: [playlistId],
+        part: ["snippet"],
+        key: config.youtube.key,
+      })
+    )?.data?.items?.[0];
+
+    const playlistItems: any[] = [];
 
     const playlistItemsGernerator = fetchYouTubeResourceItems<
       youtube_v3.Schema$PlaylistItem
@@ -70,14 +82,38 @@ export default (app: Router) => {
     );
 
     for await (const item of videosGernerator) {
+      const durationObject = parseISO8601Duration(
+        item.contentDetails?.duration as string
+      );
+      const { days, hours, minutes, seconds } = durationObject;
+
+      const duration =
+        days * 24 * 60 * 60 + hours * 60 * 60 + minutes * 60 + seconds;
+
+      const durationString = durationToString(durationObject);
       videos.push({
-        duration: item.contentDetails?.duration,
+        durationObject,
+        durationString,
+        duration,
         id: item.id,
       });
     }
 
-    console.log("videos", videos);
+    const playlistDurationInSeconds = videos.reduce(
+      (duration, video) => duration + video.duration,
+      0
+    );
 
-    res.status(200).json(playlistItems);
+    const responseObject = {
+      videos: videos.map((video, index) => ({
+        ...video,
+        ...playlistItems[index],
+      })),
+      title: playlist?.snippet?.title,
+      duration: playlistDurationInSeconds / 3600,
+      playlistId,
+    };
+
+    res.status(200).json(responseObject);
   });
 };
