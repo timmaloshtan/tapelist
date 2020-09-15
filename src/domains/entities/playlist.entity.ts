@@ -7,6 +7,7 @@ class Playlist {
   constructor(
     private readonly _url: PlaylistUrl,
     private readonly _title: string,
+    private readonly _itemCount: number,
     private _items: PlaylistItem[] = []
   ) {}
 
@@ -19,7 +20,7 @@ class Playlist {
   }
 
   get itemCount(): number {
-    return this._items.length;
+    return this._itemCount;
   }
 
   get duration(): Duration {
